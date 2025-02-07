@@ -1,9 +1,10 @@
 import logging
 import json
+import httpx
 from server.mqtt_handler import MQTTHandler
 from Motor.motor import MotorController
 from server.config.motor_config import MOTORS  # Import motor-related config
-from server.config.server_config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, BIKE_ID  # Import server settings
+from server.config.server_config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, BIKE_ID,CONNECT_SERVER_URL  # Import server settings
 
 
 
@@ -25,6 +26,10 @@ class BikeClient:
         """Handles incoming MQTT messages."""
         payload = json.loads(message.payload.decode().strip())  # Convert to JSON
         print(payload)
+        if payload == "connect":
+          #send post request to the server
+          self.acknowledge_connection()
+          return
         command = payload.get("command", "stop")  # Default to stop if missing
         speed = payload.get("speed", 50)  # Default to 50% speed
         
@@ -49,17 +54,21 @@ class BikeClient:
               logging.info("Stopping")
               self.big_motor.motor_control("stop", 0)
         
-        
-        # if payload == "connect":
-        #     
-        #     self.acknowledge_connection()
-
-
+  
     def acknowledge_connection(self):
-        """Publishes an acknowledgment message to the MQTT broker."""
-        ack_topic = f"bike/{BIKE_ID}/status"
-        self.mqtt_handler.publish(ack_topic, "connected")
-        logging.info(f"Bike {BIKE_ID} acknowledged connection.")
+        """Publishes an acknowledgment message to the MQTT broker through HTTP."""
+        try:
+          query = f"{CONNECT_SERVER_URL}?bike_id={BIKE_ID}"
+          # print(query)
+          response = httpx.post(query)
+
+          if response.status_code == 200:
+              logging.info("Successfully sent acknowledgment to server.")
+          else:
+              logging.warning(f"Server responded with status {response.status_code}")
+
+        except Exception as e:
+          logging.error(f"Failed to send HTTP acknowledgment: {str(e)}")
 
     def start(self):
         """Starts the MQTT client to listen for messages."""
