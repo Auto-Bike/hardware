@@ -1,10 +1,11 @@
 import logging
 import json
 import httpx
+import redis
 from server.mqtt_handler import MQTTHandler
 from Motor.motor import MotorController
 from server.config.motor_config import MOTORS  # Import motor-related config
-from server.config.server_config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, BIKE_ID,CONNECT_SERVER_URL  # Import server settings
+from server.config.server_config import MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, BIKE_ID,CONNECT_SERVER_URL,REDIS_HOST  # Import server settings
 
 
 
@@ -20,18 +21,20 @@ class BikeClient:
         )
         self.big_motor = MotorController(MOTORS["big_motor"])
         self.small_motor = MotorController(MOTORS["small_motor"])
+        self.redis_client = redis.Redis(host=REDIS_HOST, port=6379, db=0, decode_responses=True)
 
 
     def on_mqtt_message(self, client, userdata, message):
         """Handles incoming MQTT messages."""
         payload = json.loads(message.payload.decode().strip())  # Convert to JSON
         print(payload)
-        if payload == "connect":
+
+        command = payload.get("command", "stop")  # Default to stop if missing
+        speed = payload.get("speed", 50)  # Default to 50% speed
+        if command == "connect":
           #send post request to the server
           self.acknowledge_connection()
           return
-        command = payload.get("command", "stop")  # Default to stop if missing
-        speed = payload.get("speed", 50)  # Default to 50% speed
         
         match command:
           case "forward":
@@ -57,18 +60,26 @@ class BikeClient:
   
     def acknowledge_connection(self):
         """Publishes an acknowledgment message to the MQTT broker through HTTP."""
+        # try:
+        #   #To do, change instaed of the redis communication
+        #   query = f"{CONNECT_SERVER_URL}?bike_id={BIKE_ID}"
+        #   # print(query)
+        #   response = httpx.post(query)
+
+        #   if response.status_code == 200:
+        #       logging.info("Successfully sent acknowledgment to server.")
+        #   else:
+        #       logging.warning(f"Server responded with status {response.status_code}")
+
+        # except Exception as e:
+        #   logging.error(f"Failed to send HTTP acknowledgment: {str(e)}")
+        """Publishes an acknowledgment message to Redis."""
         try:
-          query = f"{CONNECT_SERVER_URL}?bike_id={BIKE_ID}"
-          # print(query)
-          response = httpx.post(query)
-
-          if response.status_code == 200:
-              logging.info("Successfully sent acknowledgment to server.")
-          else:
-              logging.warning(f"Server responded with status {response.status_code}")
-
+            redis_key = f"ack:{BIKE_ID}"
+            self.redis_client.set(redis_key, "acknowledged", ex=30)
+            logging.info(f"✅ Successfully acknowledged connection for Bike {BIKE_ID}")
         except Exception as e:
-          logging.error(f"Failed to send HTTP acknowledgment: {str(e)}")
+            logging.error(f"❌ Failed to send acknowledgment: {str(e)}")
 
     def start(self):
         """Starts the MQTT client to listen for messages."""
