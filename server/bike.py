@@ -59,20 +59,6 @@ class BikeClient:
         
   
     def acknowledge_connection(self):
-        """Publishes an acknowledgment message to the MQTT broker through HTTP."""
-        # try:
-        #   #To do, change instaed of the redis communication
-        #   query = f"{CONNECT_SERVER_URL}?bike_id={BIKE_ID}"
-        #   # print(query)
-        #   response = httpx.post(query)
-
-        #   if response.status_code == 200:
-        #       logging.info("Successfully sent acknowledgment to server.")
-        #   else:
-        #       logging.warning(f"Server responded with status {response.status_code}")
-
-        # except Exception as e:
-        #   logging.error(f"Failed to send HTTP acknowledgment: {str(e)}")
         """Publishes an acknowledgment message to Redis."""
         try:
             redis_key = f"ack:{BIKE_ID}"
