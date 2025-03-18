@@ -1,8 +1,19 @@
-import RPi.GPIO as GPIO
 import logging
 import time
+from enum import Enum
+
+import RPi.GPIO as GPIO
 
 logging.basicConfig(level=logging.INFO)
+
+
+class SteeringSpeed(Enum):
+    """Enum for steering speed levels."""
+
+    Regular = 30
+    LOW = 30
+    MEDIUM = 50
+    HIGH = 70
 
 
 class MotorController:
@@ -38,7 +49,7 @@ class MotorController:
         self.current_direction = "stop"
         self.current_speed = 0
 
-    def motor_control(self, direction, speed):
+    def motor_control(self, direction, speed=None, time_duration:float=None):
         """
         Controls the motor direction and speed.
         :param direction: 'forward', 'reverse', or 'stop'
@@ -62,14 +73,47 @@ class MotorController:
             self.right_pwm.ChangeDutyCycle(0)
             self.left_pwm.ChangeDutyCycle(speed)
             logging.info(f"Motor running REVERSE at {speed}% speed")
+            
+        elif direction == "right":
+            # Update state for right
+            speed = SteeringSpeed.Regular.value
+            GPIO.output(self.r_en_pin, GPIO.HIGH)
+            GPIO.output(self.l_en_pin, GPIO.HIGH)
+            self.right_pwm.ChangeDutyCycle(0)
+            self.left_pwm.ChangeDutyCycle(speed)
+            logging.info(f"Motor turning RIGHT at {speed}% speed")
+            time.sleep(time_duration)
+            self.stop_immediately()
+            logging.info(f"Motor Stop for {time_duration} seconds")
+            
+        elif direction == "left":
+            # Update state for left
+            speed = SteeringSpeed.Regular.value
+            GPIO.output(self.r_en_pin, GPIO.HIGH)
+            GPIO.output(self.l_en_pin, GPIO.HIGH)
+            self.right_pwm.ChangeDutyCycle(0)
+            self.left_pwm.ChangeDutyCycle(speed)
+            logging.info(f"Motor running LEFT at {speed}% speed")
+            time.sleep(time_duration)
+            self.stop_immediately()
+            logging.info(f"Motor Stop for {time_duration} seconds")
+
         elif direction == "stop":
             # For stop, do not update the state here.
             # Let graceful_stop handle the deceleration and state update.
             self.graceful_stop()
         else:
-            logging.error(
-                "Invalid direction! Use 'forward', 'reverse', or 'stop'."
-            )
+            logging.error("Invalid direction! Use 'forward', 'reverse', or 'stop'.")        
+            
+    def stop_immediately(self):
+        """Stops the motor immediately."""
+        GPIO.output(self.r_en_pin, GPIO.LOW)
+        GPIO.output(self.l_en_pin, GPIO.LOW)
+        self.right_pwm.ChangeDutyCycle(0)
+        self.left_pwm.ChangeDutyCycle(0)
+        self.current_direction = "stop"
+        self.current_speed = 0
+        logging.info("Motor stopped immediately")
 
     def graceful_stop(self, step=5, delay=0.2):
         """

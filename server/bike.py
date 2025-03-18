@@ -36,6 +36,7 @@ class BikeClient:
 
         command = payload.get("command", "stop")  # Default to stop if missing
         speed = payload.get("speed", 50)  # Default to 50% speed
+        time_duration = payload.get("time_duration", 1.0)  # Default to 50% speed
 
         if command == "connect":
             # Send post request to the server
@@ -45,23 +46,24 @@ class BikeClient:
         match command:
             case "forward":
                 logging.info("Moving Forward")
-                self.big_motor.motor_control("forward", speed)
+                self.big_motor.motor_control("forward", speed=speed)
 
             case "backward":
                 logging.info("Moving Backward")
-                self.big_motor.motor_control("reverse", speed)
+                self.big_motor.motor_control("reverse", speed=speed)
 
             case "left":
                 logging.info("Turning Left")
-                # self.small_motor.motor_control("left", speed)  # Custom left turn logic
+                self.small_motor.motor_control("left", time_duration=time_duration)
 
             case "right":
                 logging.info("Turning Right")
-                # self.small_motor.motor_control("right", speed)  # Custom right turn logic
+                self.small_motor.motor_control("right", time_duration=time_duration)
 
             case "stop":
                 logging.info("Stopping")
                 self.big_motor.motor_control("stop", 0)
+                self.small_motor.stop_immediately()
 
     def acknowledge_connection(self):
         """Publishes an acknowledgment message to Redis."""
