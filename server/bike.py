@@ -4,6 +4,7 @@ import redis
 from server.mqtt_handler import MQTTHandler
 from Motor.motor import MotorController
 from server.config.motor_config import MOTORS  # Import motor-related config
+from Motor.smallmotor import SmallMotorController
 from server.config.server_config import (
     MQTT_BROKER,
     MQTT_PORT,
@@ -24,7 +25,7 @@ class BikeClient:
             MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, self.on_mqtt_message
         )
         self.big_motor = MotorController(MOTORS["big_motor"])
-        self.small_motor = MotorController(MOTORS["small_motor"])
+        self.small_motor = SmallMotorController()
         self.redis_client = redis.Redis(
             host=REDIS_HOST, port=6379, db=0, decode_responses=True
         )
@@ -36,7 +37,7 @@ class BikeClient:
 
         command = payload.get("command", "stop")  # Default to stop if missing
         speed = payload.get("speed", 50)  # Default to 50% speed
-        time_duration = payload.get("time_duration", 1.0)  # Default to 50% speed
+        turning_angle = payload.get("turning_angle", 0)  # Default to 50% speed
 
         if command == "connect":
             # Send post request to the server
@@ -54,16 +55,22 @@ class BikeClient:
 
             case "left":
                 logging.info("Turning Left")
-                self.small_motor.motor_control("left", time_duration=time_duration)
+                # self.small_motor.motor_control("left", time_duration=time_duration)
+                self.small_motor.turn_left_by(turning_angle)
 
             case "right":
                 logging.info("Turning Right")
-                self.small_motor.motor_control("right", time_duration=time_duration)
+                # self.small_motor.motor_control("right", time_duration=time_duration)
+                self.small_motor.turn_right_by(turning_angle)
+
+            case "center":
+                logging.info("Centering")
+                self.small_motor.center()
 
             case "stop":
                 logging.info("Stopping")
                 self.big_motor.motor_control("stop", 0)
-                self.small_motor.stop_immediately()
+                self.small_motor.stop()
 
     def acknowledge_connection(self):
         """Publishes an acknowledgment message to Redis."""
