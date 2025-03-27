@@ -1,10 +1,13 @@
 import logging
 import json
-import redis
+import time
+import threading
 from server.mqtt_handler import MQTTHandler
 from Motor.motor import MotorController
 from server.config.motor_config import MOTORS  # Import motor-related config
 from Motor.smallmotor import SmallMotorController
+from Redis.redis_manager import RedisManager
+from GPS.GPS_reader import SerialGPSReader
 from server.config.server_config import (
     MQTT_BROKER,
     MQTT_PORT,
@@ -26,9 +29,14 @@ class BikeClient:
         )
         self.big_motor = MotorController(MOTORS["big_motor"])
         self.small_motor = SmallMotorController()
-        self.redis_client = redis.Redis(
-            host=REDIS_HOST, port=6379, db=0, decode_responses=True
-        )
+        # self.redis_client = redis.Redis(
+        #     host=REDIS_HOST, port=6379, db=0, decode_responses=True
+        # )
+        self.redis = RedisManager(REDIS_HOST, 6379)
+        # to add, intialize the GPS reader
+        self.gps_reader = SerialGPSReader()
+        self.start_gps_thread()
+        #
 
     def on_mqtt_message(self, client, userdata, message):
         """Handles incoming MQTT messages."""
@@ -74,13 +82,25 @@ class BikeClient:
 
     def acknowledge_connection(self):
         """Publishes an acknowledgment message to Redis."""
-        try:
-            redis_key = f"ack:{BIKE_ID}"
-            self.redis_client.set(redis_key, "acknowledged", ex=30)
-            logging.info(f"✅ Successfully acknowledged connection for Bike {BIKE_ID}")
-        except Exception as e:
-            logging.error(f"❌ Failed to send acknowledgment: {str(e)}")
+        self.redis.acknowledge_connection(BIKE_ID)
 
     def start(self):
         """Starts the MQTT client to listen for messages."""
         self.mqtt_handler.start()
+
+    def start_gps_thread(self):
+        def gps_loop():
+            while True:
+                data = self.gps_reader.read_data()
+                if data:
+                    payload = {
+                        "bike_id": BIKE_ID,
+                        "latitude": data.get("latitude"),
+                        "longitude": data.get("longitude"),
+                        "timestamp": time.time(),
+                    }
+                    self.redis.push_gps_data(BIKE_ID, payload)
+                time.sleep(1)
+
+        gps_thread = threading.Thread(target=gps_loop, daemon=True)
+        gps_thread.start()

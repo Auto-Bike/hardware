@@ -1,9 +1,8 @@
-import json
 import time
 from abc import ABC, abstractmethod
 from typing import Optional
 
-import redis
+from Redis.redis_manager import RedisManager
 import serial
 
 # Redis Configuration
@@ -17,21 +16,6 @@ class IDataStore(ABC):
     @abstractmethod
     def push_gps_data(self, bike_id: str, data: dict) -> None:
         pass
-
-
-# --- Concrete Implementation for Redis ---
-class RedisDataStore(IDataStore):
-    """Handles Redis interactions."""
-
-    def __init__(self, host: str, port: int):
-        self.client = redis.Redis(host=host, port=port, decode_responses=True)
-
-    def push_gps_data(self, bike_id: str, data: dict) -> None:
-        try:
-            self.client.set(f"gps:{bike_id}", json.dumps(data), ex=30)
-            print("Pushed GPS Data to Redis:", data)
-        except Exception as e:
-            print("Error pushing GPS data to Redis:", e)
 
 
 # --- Interface for GPS Reader (Dependency Inversion) ---
@@ -144,7 +128,7 @@ class GPSSender:
 
 
 if __name__ == "__main__":
-    data_store = RedisDataStore(REDIS_HOST, REDIS_PORT)
+    data_store = RedisManager(REDIS_HOST, REDIS_PORT)
     gps_reader = SerialGPSReader()
     gps_sender = GPSSender(BIKE_ID, gps_reader, data_store)
     gps_sender.send_gps_data()
