@@ -1,10 +1,20 @@
 import threading
+import logging
 from Motor.config import MOTORS
 from Motor.motor import MotorController
 from Motor.ESP32.main import ESP32SerialReader
 from Motor.PID.pid_controller import PIDController
-
 from datetime import datetime
+
+# ✅ Setup logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        # logging.FileHandler("motor_debug.log"),  # Optional file logging
+    ],
+)
 
 
 class SteeringController:
@@ -28,7 +38,7 @@ class SteeringController:
 
         while True:
             if self.stop_callback and self.stop_callback():
-                print("⛔ Movement interrupted by stop command.")
+                logging.warning("⛔ Movement interrupted by stop command.")
                 self.motor.stop_immediately()
                 break
 
@@ -50,13 +60,13 @@ class SteeringController:
 
             direction = "right" if control > 0 else "left"
             speed = min(100, abs(control))
-            print(
+            logging.info(
                 f"🌀 PID Output: {control:.2f} -> Direction: {direction}, Speed: {speed:.1f}"
             )
             self.motor.motor_control(direction=direction, speed=speed)
 
             if current_time > max_time:
-                print("⏱️ Timeout reached")
+                logging.warning("⏱️ Timeout reached")
                 break
 
         self.motor.stop_immediately()
@@ -80,7 +90,7 @@ class SteeringController:
             plt.grid(True)
             plt.tight_layout()
             plt.savefig(plot_path)
-            print(f"📊 PID plot saved to: {plot_path}")
+            logging.info(f"📊 PID plot saved to: {plot_path}")
 
 
 class SmallMotorController:
@@ -103,49 +113,61 @@ class SmallMotorController:
         current_angle = self.get_current_angle()
         motor_delta = delta_angle / self.gear_ratio
         target_angle = max(0.0, current_angle - motor_delta)
-
-        self._start_rotation_thread(target_angle)
-
-        print("⬅️ LEFT TURN STARTED")
-        print(f"🔢 Requested steering angle: {delta_angle:.2f}°")
-        print(f"⚙️ Gear ratio: 1 / {self.gear_ratio}")
-        print(f"📐 Motor delta: {motor_delta:.2f}°")
-        print(f"🎯 Target angle: {target_angle:.2f}° (from {current_angle:.2f}°)\n")
+        self._start_rotation_thread(
+            target_angle,
+            command="left",
+            requested_angle=delta_angle,
+            current_angle=current_angle,
+        )
 
     def turn_right_by(self, delta_angle: float):
         current_angle = self.get_current_angle()
         motor_delta = delta_angle / self.gear_ratio
         target_angle = min(300.0, current_angle + motor_delta)
-
-        self._start_rotation_thread(target_angle)
-
-        print("➡️ RIGHT TURN STARTED")
-        print(f"🔢 Requested steering angle: {delta_angle:.2f}°")
-        print(f"⚙️ Gear ratio: 1 / {self.gear_ratio}")
-        print(f"📐 Motor delta: {motor_delta:.2f}°")
-        print(f"🎯 Target angle: {target_angle:.2f}° (from {current_angle:.2f}°)\n")
+        self._start_rotation_thread(
+            target_angle,
+            command="right",
+            requested_angle=delta_angle,
+            current_angle=current_angle,
+        )
 
     def turn_to(self, absolute_angle: float):
         current_angle = self.get_current_angle()
-        self._start_rotation_thread(absolute_angle)
-        print(f"➡️ Rotating from {current_angle:.2f}° to {absolute_angle:.2f}°")
+        self._start_rotation_thread(
+            absolute_angle,
+            command="rotate",
+            requested_angle=None,
+            current_angle=current_angle,
+        )
 
     def center(self):
-        self._start_rotation_thread(self.neutral_angle)
-        print(f"🎯 Returning to center angle: {self.neutral_angle:.2f}°")
+        current_angle = self.get_current_angle()
+        self._start_rotation_thread(
+            self.neutral_angle,
+            command="center",
+            requested_angle=None,
+            current_angle=current_angle,
+        )
 
-    def _start_rotation_thread(self, target_angle):
+    def _start_rotation_thread(
+        self, target_angle, command=None, requested_angle=None, current_angle=None
+    ):
         if self._rotation_thread and self._rotation_thread.is_alive():
-            print("⚠️ A rotation is already in progress. Please stop it first.")
+            logging.warning(
+                "⚠️ A rotation is already in progress. Please stop it first."
+            )
             return
 
         self._stop_requested = False
         self._rotation_thread = threading.Thread(
-            target=self._rotate_to, args=(target_angle,)
+            target=self._rotate_to,
+            args=(target_angle, command, requested_angle, current_angle),
         )
         self._rotation_thread.start()
 
-    def _rotate_to(self, target_angle):
+    def _rotate_to(
+        self, target_angle, command=None, requested_angle=None, current_angle=None
+    ):
         start_angle = self.get_current_angle()
         controller = SteeringController(
             self.esp32,
@@ -155,26 +177,39 @@ class SmallMotorController:
         )
         controller.rotate_to_angle()
         new_angle = self.get_current_angle()
-        print(f"✅ Start angle: {start_angle:.2f}°")
-        print(f"✅ Final angle: {new_angle:.2f}°\n")
+
+        # ✅ Final logs printed AFTER motion finishes
+        if command and requested_angle is not None and current_angle is not None:
+            logging.info(f"\n➡️ {command.upper()} TURN COMPLETED")
+            logging.info(f"🔢 Requested steering angle: {requested_angle:.2f}°")
+            logging.info(f"⚙️ Gear ratio: 1 / {self.gear_ratio}")
+            logging.info(f"📐 Motor delta: {(requested_angle / self.gear_ratio):.2f}°")
+            logging.info(
+                f"🎯 Target angle: {target_angle:.2f}° (from {current_angle:.2f}°)"
+            )
+
+        logging.info(f"✅ Start angle: {start_angle:.2f}°")
+        logging.info(f"✅ Final angle: {new_angle:.2f}°\n")
 
     def stop(self):
-        print("🛑 Stop command received.")
+        logging.info("🛑 Stop command received.")
         self._stop_requested = True
         if self._rotation_thread and self._rotation_thread.is_alive():
             self._rotation_thread.join()
-            print("✅ Rotation thread stopped.")
+            logging.info("✅ Rotation thread stopped.")
 
     def cleanup(self):
         self.motor.cleanup()
         self.esp32.close()
 
 
-# 🧪 CLI Interface for testing manually
+# 🧪 CLI Interface
 if __name__ == "__main__":
     try:
         controller = SmallMotorController()
-        print("Commands: left [angle], right [angle], rotate [angle], center, stop")
+        logging.info(
+            "Commands: left [angle], right [angle], rotate [angle], center, stop"
+        )
 
         while True:
             parts = input("Enter command: ").strip().lower().split()
@@ -194,7 +229,7 @@ if __name__ == "__main__":
                     elif cmd == "rotate":
                         controller.turn_to(angle)
                 except ValueError:
-                    print("❗ Invalid angle input.")
+                    logging.error("❗ Invalid angle input.")
 
             elif cmd == "center":
                 controller.center()
@@ -203,12 +238,12 @@ if __name__ == "__main__":
                 controller.stop()
 
             else:
-                print(
+                logging.warning(
                     "❌ Invalid command. Try: left 30, right 15, rotate 150, center, stop"
                 )
 
     except KeyboardInterrupt:
-        print("\n🛑 Exiting manual control...")
+        logging.info("🛑 Exiting manual control...")
 
     finally:
         controller.cleanup()
