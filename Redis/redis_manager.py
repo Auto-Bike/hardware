@@ -10,7 +10,7 @@ class RedisManager:
     def push_gps_data(self, bike_id: str, data: dict) -> None:
         try:
             self.client.set(f"gps:{bike_id}", json.dumps(data), ex=30)
-            print("Pushed GPS Data to Redis:", data)
+            # print("Pushed GPS Data to Redis:", data)
         except Exception as e:
             print("Error pushing GPS data to Redis:", e)
 

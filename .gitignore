@@ -1,3 +1,5 @@
 *venv
 *.pyc
 *pid_plots
+*.env
+key.py
