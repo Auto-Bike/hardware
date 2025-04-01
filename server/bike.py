@@ -24,22 +24,23 @@ logging.basicConfig(level=logging.INFO)
 class BikeClient:
     """Handles bike-specific MQTT message processing."""
 
-    def __init__(self):
+    def __init__(self, debug=True):
         """Initializes the bike and sets up MQTT communication."""
         self.mqtt_handler = MQTTHandler(
             MQTT_BROKER, MQTT_PORT, MQTT_TOPIC, self.on_mqtt_message
         )
         self.big_motor = MotorController(MOTORS["big_motor"])
-        self.small_motor = MotorController(
-            MOTORS["small_motor"]
-        )  # this is only for testing when esp32 is not connected
-        # self.small_motor = SmallMotorController()
+        # self.small_motor = MotorController(
+        #     MOTORS["small_motor"]
+        # )  # this is only for testing when esp32 is not connected
+        self.small_motor = SmallMotorController()
 
         self.redis = RedisManager(REDIS_HOST, 6379)
         # to add, intialize the GPS reader
         self.gps_reader = SerialGPSReader()
         self.start_gps_thread()
         self.route_planner = RoutePlanner(API_KEY)
+        self.debug = debug
         #
 
     def on_mqtt_message(self, client, userdata, message):
@@ -138,33 +139,33 @@ class BikeClient:
         if forward_duration is None:
             forward_duration = self.TURN_DURATION_SEC
 
-        # 1. Turn the front wheel
         if direction == "LEFT":
             logging.info(f"↪️ Turning LEFT by {angle}°")
-            self.small_motor.turn_left_by(angle)
+            if not self.debug:
+                self.small_motor.turn_left_by(angle)
         elif direction == "RIGHT":
             logging.info(f"↩️ Turning RIGHT by {angle}°")
-            self.small_motor.turn_right_by(angle)
+            if not self.debug:
+                self.small_motor.turn_right_by(angle)
         else:
             logging.warning(f"⚠️ Invalid turn direction: {direction}")
             return
 
-        # 2. Move forward while in turned state
         logging.info(
             f"🚴 Moving forward during turn for {forward_duration:.2f} seconds at speed {speed}"
         )
-        self.big_motor.motor_control("forward", speed)
-        time.sleep(forward_duration)
-        self.big_motor.motor_control("stop", 0)
+        if not self.debug:
+            self.big_motor.motor_control("forward", speed)
+            time.sleep(forward_duration)
+            self.big_motor.motor_control("stop", 0)
 
-        # 3. Center the wheel
         logging.info("🎯 Centering front wheel")
-        self.small_motor.center()
-        time.sleep(0.5)  # short pause after re-centering
+        if not self.debug:
+            self.small_motor.center()
+            time.sleep(0.5)
 
     def handle_navigation(self, start, destination):
         """Handles route planning using start and destination coordinates."""
-
         try:
             origin = {"latitude": start["lat"], "longitude": start["lon"]}
             dest = {"latitude": destination["lat"], "longitude": destination["lon"]}
@@ -188,18 +189,12 @@ class BikeClient:
 
                 duration = self.estimate_duration(step.distance)
                 logging.info(f"🚴 Moving forward for approx {duration:.2f} seconds\n")
-                self.big_motor.motor_control("forward", speed=30)
-                time.sleep(duration)
-                self.big_motor.motor_control("stop", speed=0)
-                time.sleep(1)
 
-                # several assumptions have to make here
-                # 1. the bike would always face the correct direction
-                # 2. the turning angle would always stay 60 degrees
-                # 3. the turning angle would recover to center after X seconds turning
-                # 4. the distance required for turning would be 10 meters
-                # 5. the bike would always move forward for 10 meters
+                if not self.debug:
+                    self.big_motor.motor_control("forward", speed=30)
+                    time.sleep(duration)
+                    self.big_motor.motor_control("stop", speed=0)
+                    time.sleep(1)
 
-            # 🚧 TODO: Add logic to follow each step using motors
         except Exception as e:
             logging.error(f"❌ Route planning failed: {e}")

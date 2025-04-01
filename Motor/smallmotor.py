@@ -23,7 +23,7 @@ class SteeringController:
     ):
         self.esp32 = esp32_reader
         self.motor = motor_controller
-        self.pid = PIDController(kp=0.8, ki=0.001, kd=0.05, setpoint=target_angle)
+        self.pid = PIDController(kp=0.8, ki=0.01, kd=0.05, setpoint=target_angle)
         self.stop_callback = stop_callback
 
     def rotate_to_angle(self, tolerance=2.0, max_time=30, debug=False):
@@ -58,7 +58,7 @@ class SteeringController:
                 self.motor.stop_immediately()
                 break
 
-            direction = "right" if control > 0 else "left"
+            direction = "left" if control > 0 else "right"
             speed = min(100, abs(control))
             logging.info(
                 f"🌀 PID Output: {control:.2f} -> Direction: {direction}, Speed: {speed:.1f}"
