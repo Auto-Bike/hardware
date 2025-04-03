@@ -18,7 +18,9 @@ big_motor = MotorController(MOTORS["big_motor"])
 # ---- Setup small steering motor with the new continuous approach ----
 esp32 = ESP32SerialReader()
 esp32.connect()
-steering_motor = MotorController(...)  # pins for the small steering motor
+steering_motor = MotorController(
+    MOTORS["small_motor"]
+)  # pins for the small steering motor
 steering_controller = ContinuousSteeringController(
     motor=steering_motor,
     esp32=esp32,
@@ -73,22 +75,23 @@ def handle_left_stick_y(value):
     global axis_state  # or pass old_value in as a parameter
 
     deadzone = 0.1
-    old_value = axis_state["LY"]  # The last stored joystick value
+    # old_value = axis_state["LY"]  # The last stored joystick value
 
-    # Check if sign has changed (e.g. from + to - or - to +)
-    sign_changed = (old_value > 0 and value < 0) or (old_value < 0 and value > 0)
+    # No need to detect the sign changed, assume it can handle pretty well
+    # # Check if sign has changed (e.g. from + to - or - to +)
+    # sign_changed = (old_value > 0 and value < 0) or (old_value < 0 and value > 0)
 
-    # If the user let go or reversed direction, do a short stop
-    # i wasnt sure if this was needed  but just until testing is done
-    if sign_changed:
-        short_stop_transition()
+    # # If the user let go or reversed direction, do a short stop
+    # # i wasnt sure if this was needed  but just until testing is done
+    # if sign_changed:
+    #     short_stop_transition()
 
     # After short stop, handle deadzone
     if abs(value) < deadzone:
-        big_motor.graceful_stop()
+        big_motor.stop_immediately()
         print("Big motor STOP!")
         axis_state["LY"] = value
-        time.sleep(0.5)  # short pause
+        # time.sleep(0.05)  # short pause
         return
 
     pwm = int(min(abs(value), 1.0) * MAX_BIG_MOTOR_PWM)
