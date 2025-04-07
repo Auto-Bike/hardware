@@ -1,7 +1,14 @@
 import time
 import json
 import threading
-import keyboard  # Requires the 'keyboard' library
+
+from Motor.motor import MotorController
+from Motor.config import MOTORS
+from Motor.ESP32.main import ESP32SerialReader
+from BLT.continuous_steering import ContinuousSteeringController
+from Redis.redis_manager import RedisManager
+from GPS.GPS_reader import SerialGPSReader
+from server.config.server_config import REDIS_HOST, BIKE_ID
 
 
 class TrajectoryReplayer:
@@ -57,20 +64,12 @@ class TrajectoryReplayer:
         """
         Play back the recorded throttle and steering commands
         with timing based on original timestamps.
-        Press ESC to abort.
         """
         if not self.trajectory:
             self.load_trajectory()
 
         print("🚗 Starting trajectory replay...")
-        self.start_gps_tracking()
-
-        def listen_for_abort():
-            keyboard.wait("esc")
-            self.abort_flag = True
-            print("🛑 Abort key pressed. Stopping replay.")
-
-        threading.Thread(target=listen_for_abort, daemon=True).start()
+        # self.start_gps_tracking()
 
         start_time = self.trajectory[0]["timestamp"]
         for i, frame in enumerate(self.trajectory):
@@ -103,21 +102,25 @@ class TrajectoryReplayer:
 
         print("✅ Trajectory replay finished.")
         self.motor.stop_immediately()
-        self.steering.center_steering()
+        self.steering.stop()
 
 
 # Example usage
 if __name__ == "__main__":
-    from Motor.motor import MotorController
-    from Motor.config import MOTORS
-
-    # from Motor.ESP32.main import ESP32SerialReader
-    from Redis.redis_manager import RedisManager
-    from GPS.GPS_reader import SerialGPSReader
-    from server.config.server_config import REDIS_HOST, BIKE_ID
+    esp32 = ESP32SerialReader()
+    esp32.connect()
 
     motor = MotorController(MOTORS["big_motor"])
-    steering = MotorController(MOTORS["small_motor"])
+
+    steering_motor = MotorController(MOTORS["small_motor"])
+    steering = ContinuousSteeringController(
+        motor=steering_motor,
+        esp32=esp32,
+        initial_angle=150.0,
+        gear_ratio=1.5,
+    )
+    steering.start()
+
     gps = SerialGPSReader()
     redis_client = RedisManager(REDIS_HOST, 6379)
 
@@ -135,4 +138,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("❌ Ctrl+C detected! Stopping the bike...")
         motor.stop_immediately()
-        steering.center_steering()
+        steering.stop()

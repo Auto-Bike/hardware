@@ -1,5 +1,6 @@
 import serial
 import time
+import threading
 
 
 class ESP32SerialReader:
@@ -8,6 +9,8 @@ class ESP32SerialReader:
         self.baudrate = baudrate
         self.timeout = timeout
         self.ser = None
+        self.lock = threading.Lock()
+        self.last_valid_angle = 150.0  # default center
 
     def connect(self):
         try:
@@ -18,21 +21,34 @@ class ESP32SerialReader:
             raise
 
     def request_data(self):
-        message = "r\n"
-        self.ser.write(message.encode())
-        print(f"Sent to ESP32: {message.strip()}")
-
-        response = self.ser.readline().decode("utf-8").strip()
-        if response:
-            print(f"Raw response from ESP32: {response}")
+        with self.lock:
             try:
-                adc_value = int(response)
-                angle = self._convert_to_angle(adc_value)
-                print(f"🎯 Potentiometer angle: {angle:.2f}°")
-                return angle
-            except ValueError:
-                print("⚠️  Invalid numeric response")
-        return None
+                message = "r\n"
+                self.ser.write(message.encode())
+                # print(f"Sent to ESP32: {message.strip()}")  # Optional debug
+
+                response = self.ser.readline().decode("utf-8").strip()
+                if response:
+                    # print(f"Raw response from ESP32: {response}")  # Optional debug
+                    try:
+                        adc_value = int(response)
+                        angle = self._convert_to_angle(adc_value)
+
+                        if 0 <= angle <= 300:
+                            self.last_valid_angle = angle
+                            print(f"🎯 Potentiometer angle: {angle:.2f}°")
+                            return angle
+                        else:
+                            print(f"⚠️ Out-of-range angle: {angle:.2f}°")
+
+                    except ValueError:
+                        print("⚠️ Invalid numeric response")
+
+                return self.last_valid_angle  # fallback
+
+            except Exception as e:
+                print(f"❗ Serial read error: {e}")
+                return self.last_valid_angle
 
     def _convert_to_angle(self, adc_value):
         return (adc_value / 4095.0) * 300.0

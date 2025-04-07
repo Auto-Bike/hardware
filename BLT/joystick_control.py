@@ -86,7 +86,7 @@ class GamepadController:
 class DriveController:
     """Controls the main drive motor."""
 
-    def __init__(self, motor_controller, max_pwm=70):
+    def __init__(self, motor_controller, max_pwm=80):
         self.motor = motor_controller
         self.max_pwm = max_pwm
         self.current_value = 0.0

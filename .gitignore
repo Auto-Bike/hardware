@@ -3,3 +3,4 @@
 *pid_plots
 *.env
 key.py
+*.json

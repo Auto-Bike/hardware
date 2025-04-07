@@ -7,8 +7,6 @@ import json
 
 
 class GamepadController:
-    """Handles gamepad input and event processing."""
-
     AXIS_CODES = {
         1: "LY",  # Left stick Y-axis => big motor
         2: "RX",  # Right stick X-axis => steering
@@ -23,7 +21,6 @@ class GamepadController:
         self.callbacks = {"LY": [], "RX": []}
 
     def connect(self):
-        """Connect to the gamepad device."""
         try:
             self.gamepad = InputDevice(self.device_path)
             print(f"🎮 Connected to {self.gamepad.name} on {self.device_path}")
@@ -33,7 +30,6 @@ class GamepadController:
             return False
 
     def normalize_axis(self, axis_code, value):
-        """Normalize axis values to a -1.0 to 1.0 range."""
         if axis_code == 1:  # LY
             return round((32767.5 - value) / 32767.5, 3)
         elif axis_code == 2:  # RX
@@ -41,12 +37,10 @@ class GamepadController:
         return 0.0
 
     def register_callback(self, axis_name, callback_function):
-        """Register a callback function for an axis."""
         if axis_name in self.callbacks:
             self.callbacks[axis_name].append(callback_function)
 
     def process_controller_inputs(self):
-        """Process inputs from the gamepad."""
         while self.running:
             r, _, _ = select([self.gamepad.fd], [], [], 0.01)
             if r:
@@ -57,15 +51,13 @@ class GamepadController:
                         if axis_name:
                             new_val = self.normalize_axis(code, event.value)
                             old_val = self.axis_state[axis_name]
-                            if abs(new_val - old_val) > 0.1:  # Sensitivity threshold
+                            if abs(new_val - old_val) > 0.1:
                                 self.axis_state[axis_name] = new_val
-                                # Execute all callbacks for this axis
                                 for callback in self.callbacks[axis_name]:
                                     callback(new_val)
             time.sleep(0.01)
 
     def start(self):
-        """Start the gamepad input processing thread."""
         if not self.gamepad:
             if not self.connect():
                 return False
@@ -78,7 +70,6 @@ class GamepadController:
         return True
 
     def stop(self):
-        """Stop the gamepad input processing thread."""
         self.running = False
         if self.input_thread and self.input_thread.is_alive():
             self.input_thread.join(timeout=1.0)
@@ -89,7 +80,7 @@ class DriveController:
         self.motor = motor_controller
         self.max_pwm = max_pwm
         self.current_value = 0.0
-        self.latest_throttle = 0.0  # for logging
+        self.latest_throttle = 0.0
 
     def handle_drive_input(self, value):
         deadzone = 0.1
@@ -120,7 +111,7 @@ class SteeringController:
         self.steering_controller = continuous_controller
         self.center_angle = center_angle
         self.max_angle_delta = max_angle_delta
-        self.latest_steering = 0.0  # for logging
+        self.latest_steering = 0.0
 
     def handle_steering_input(self, value):
         deadzone = 0.1
@@ -145,13 +136,6 @@ class RCCarController:
         from Motor.config import MOTORS
         from Motor.ESP32.main import ESP32SerialReader
         from BLT.continuous_steering import ContinuousSteeringController
-        from Redis.redis_manager import RedisManager
-        from GPS.GPS_reader import SerialGPSReader
-        from server.config.server_config import BIKE_ID, REDIS_HOST
-
-        self.redis = RedisManager(REDIS_HOST, 6379)
-        self.gps_reader = SerialGPSReader()
-        self.bike_id = BIKE_ID
 
         self.big_motor = MotorController(MOTORS["big_motor"])
         self.drive_controller = DriveController(self.big_motor)
@@ -172,7 +156,6 @@ class RCCarController:
     def initialize(self):
         self.esp32.connect()
         self.continuous_steering.start()
-        self.start_gps_thread()
         self.start_logging_thread()
 
         if not self.gamepad.connect():
@@ -202,33 +185,14 @@ class RCCarController:
         self.save_log()
         print("Shutdown complete.")
 
-    def start_gps_thread(self):
-        def gps_loop():
-            while True:
-                data = self.gps_reader.read_data()
-                if data:
-                    payload = {
-                        "bike_id": self.bike_id,
-                        "latitude": data.get("latitude"),
-                        "longitude": data.get("longitude"),
-                        "timestamp": time.time(),
-                    }
-                    self.redis.push_gps_data(self.bike_id, payload)
-                time.sleep(1)
-
-        threading.Thread(target=gps_loop, daemon=True).start()
-
     def start_logging_thread(self):
         def log_loop():
             while True:
-                gps_data = self.gps_reader.read_data()
                 angle = self.esp32.request_data()
-                if gps_data and angle is not None:
+                if angle is not None:
                     self.logged_data.append(
                         {
                             "timestamp": time.time(),
-                            "latitude": gps_data.get("latitude"),
-                            "longitude": gps_data.get("longitude"),
                             "heading_angle": angle,
                             "joystick": {
                                 "throttle": self.drive_controller.latest_throttle,
@@ -236,7 +200,7 @@ class RCCarController:
                             },
                         }
                     )
-                time.sleep(0.5)
+                time.sleep(0.8)
 
         threading.Thread(target=log_loop, daemon=True).start()
 

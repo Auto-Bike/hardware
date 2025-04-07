@@ -84,7 +84,7 @@ class ContinuousSteeringController:
         PID loop that continuously runs in the background, driving the motor
         to match the target angle from self._target_angle / self.pid.setpoint.
         """
-        min_pwm = 20
+        # min_pwm = 20
         while not self._stop_flag:
             current_angle = self.esp32.request_data()  # e.g. 0..300
             if current_angle is not None:
@@ -97,8 +97,8 @@ class ContinuousSteeringController:
                 direction = "left" if control_output > 0 else "right"
 
                 speed = min(100, abs(control_output))
-                if 0 < speed < min_pwm:
-                    speed = min_pwm
+                # if 0 < speed < min_pwm:
+                #     speed = min_pwm
 
                 self.motor.motor_control(direction=direction, speed=speed)
 

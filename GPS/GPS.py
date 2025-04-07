@@ -127,8 +127,24 @@ class GPSSender:
             self.gps_reader.close()
 
 
+# if __name__ == "__main__":
+#     data_store = RedisManager(REDIS_HOST, REDIS_PORT)
+#     gps_reader = SerialGPSReader()
+#     gps_sender = GPSSender(BIKE_ID, gps_reader, data_store)
+#     try:
+#         gps_sender = GPSSender(BIKE_ID, gps_reader, data_store)
+#         gps_sender.send_gps_data()
+#     finally:
+#         gps_reader.close()
+
 if __name__ == "__main__":
-    data_store = RedisManager(REDIS_HOST, REDIS_PORT)
-    gps_reader = SerialGPSReader()
-    gps_sender = GPSSender(BIKE_ID, gps_reader, data_store)
-    gps_sender.send_gps_data()
+    gps = SerialGPSReader()
+    try:
+        while True:
+            data = gps.read_data()
+            print(f"[DEBUG] GPS Raw: {data}")
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Stopped.")
+    finally:
+        gps.close()

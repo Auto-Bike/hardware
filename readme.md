@@ -22,3 +22,10 @@ sudo systemctl enable bike_service
 sudo tail -f /var/log/bike_service.log
 
 sudo python3 -m BLT.motor_control
+
+sudo python3 -m BLT.joystick_control
+
+sudo python3 -m BLT.joystick_control_log
+
+**Path following Cmd**
+sudo python3 -m Auto_Drive.trajectory_replay
