@@ -1,6 +1,6 @@
 # Autonomous Bike Hardware System
 
-This repository contains the hardware control components for the Autonomous Bike project developed for the McMaster University 4OI6 Capstone Course. The system enables an electric bicycle to autonomously navigate to user-defined destinations, addressing the last-mile transportation challenge.
+This repository contains the hardware control components for the Autonomous Bike project developed for the McMaster University 4OI6 Capstone Course. The system enables an electric bicycle to autonomously navigate to user-defined destinations, addressing the last-mile transportation challenge. The full report is available [here](https://drive.google.com/file/d/1rYNFWow4iSMQe98GnzFRXwHmZjyouQjB/view?usp=drive_link).
 
 ## 🛠️ Hardware Overview
 
